@@ -21,7 +21,6 @@ def LoadModel(dataset_name):
 
 def lerp(a,b,t):
      return a + (b - a) * t
-
 #stylegan-ada
 def SelectName(layer_name,suffix):
     if suffix==None:

@@ -21,6 +21,8 @@ class MAdvance(Manipulator):
         self.threshold2=0.25 #gap between first and second
         self.w=np.load('./npy/'+dataset_name+'/W.npy')
         
+        print(f'shape of W: {self.w.shape}')
+        
         self.code_mean2=np.concatenate(self.code_mean)
         self.code_std2=np.concatenate(self.code_std)
         
@@ -173,7 +175,7 @@ if __name__ == "__main__":
     np.set_printoptions(suppress=True)
     #%%
     
-    M.bname='13-blond-hair'  #01-smiling, 37-wearing-lipstick,13-blond-hair
+    M.bname='goatee'  #01-smiling, 37-wearing-lipstick,13-blond-hair
 #    lp_sort=M.ConsistenceCheck(num_run=1000)
     
     lp_candidate,lp_sort= M.AllCheck()
@@ -182,6 +184,7 @@ if __name__ == "__main__":
     plt.plot(lp_sort[:10],'*')
     plt.ylabel('signal2noise')
     plt.xlabel('(layer_index, channel_index)')
+    plt.show()
     #%%
     
     M.alpha=[-20,-10,-5,0,5,10,20]
