@@ -25,6 +25,7 @@ def LoadModel(dataset_name):
 
 def lerp(a,b,t):
      return a + (b - a) * t
+
 #stylegan-ada
 def SelectName(layer_name,suffix):
     if suffix==None:
@@ -207,11 +208,17 @@ if __name__ == "__main__":
     parser.add_argument('--resize',type=int,default=None,
                     help='save image size')
     
+    parser.add_argument('--num_img',type=int,default=None,
+                    help='the number of images')
+    
+    parser.add_argument('--num_once',type=int,default=500,
+                    help='the number of images')
+    
     
     args = parser.parse_args()
     random_state=5
-    num_img=100_000 
-    num_once=500
+    num_img= args.num_img 
+    num_once=args.num_one
     dataset_name=args.dataset_name
     truncation=args.no_truncation
     output_path=args.output_path
@@ -241,7 +248,7 @@ if __name__ == "__main__":
         
     elif args.code_type=='s':
         save_name='S'
-        save_tmp=GetS(output_path,num_img=2_000)
+        save_tmp=GetS(output_path,num_img=num_img)
         tmp=output_path+'/'+save_name
         with open(tmp, "wb") as fp:
             pickle.dump(save_tmp, fp)
@@ -265,17 +272,11 @@ if __name__ == "__main__":
         tmp=output_path+'/S_Flat'
         np.save(tmp,dlatents)
     
-    elif args.code_type=='images_1K':
+    elif args.code_type=='images':
         Gs=LoadModel(dataset_name=dataset_name)
-        all_images=GetImg(Gs,num_img=1_000,num_once=num_once,output_path=output_path,resize=args.resize)
+        all_images=GetImg(Gs,num_img=num_img,num_once=num_once,output_path=output_path,resize=args.resize)
         tmp=output_path+'/images'
         np.save(tmp,all_images)
     
-    elif args.code_type=='images_100K':
-        Gs=LoadModel(dataset_name=dataset_name)
-        all_images=GetImg(Gs,num_img=num_img,num_once=num_once,output_path=output_path,resize=args.resize)
-        
-        tmp=output_path+'/images_100K'
-        np.save(tmp,all_images)
     
     
