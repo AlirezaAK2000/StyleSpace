@@ -218,7 +218,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     random_state=5
     num_img= args.num_img 
-    num_once=args.num_one
+    num_once=args.num_once
     dataset_name=args.dataset_name
     truncation=args.no_truncation
     output_path=args.output_path
@@ -259,6 +259,7 @@ if __name__ == "__main__":
         dlatents=save_tmp[1]
         m,std=GetCodeMS(dlatents)
         save_tmp=[m,std]
+        print([s.shape for s in save_tmp[0]])
         save_name='S_mean_std'
         tmp=output_path+'/'+save_name
         with open(tmp, "wb") as fp:
