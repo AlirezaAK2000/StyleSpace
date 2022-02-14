@@ -7,33 +7,44 @@ import numpy as np
 import tensorflow as tf
 from dnnlib import tflib
 from utils.visualizer import HtmlPageVisualizer
+from PIL import Image
+import matplotlib.pyplot as plt
 
-
-def Vis(bname,suffix,out,rownames=None,colnames=None):
+def Vis(bname,suffix,out,rownames=None,colnames=None , save=False):
     num_images=out.shape[0]
     step=out.shape[1]
     
-    if colnames is None:
-        colnames=[f'Step {i:02d}' for i in range(1, step + 1)]
-    if rownames is None:
-        rownames=[str(i) for i in range(num_images)]
+    # if colnames is None:
+    #     colnames=[f'Step {i:02d}' for i in range(1, step + 1)]
+    # if rownames is None:
+    #     rownames=[str(i) for i in range(num_images)]
     
     
-    visualizer = HtmlPageVisualizer(
-      num_rows=num_images, num_cols=step + 1, viz_size=256)
-    visualizer.set_headers(
-      ['Name'] +colnames)
+    # visualizer = HtmlPageVisualizer(
+    #   num_rows=num_images, num_cols=step + 1, viz_size=256)
+    # visualizer.set_headers(
+    #   ['Name'] +colnames)
     
-    for i in range(num_images):
-        visualizer.set_cell(i, 0, text=rownames[i])
+    # for i in range(num_images):
+    #     visualizer.set_cell(i, 0, text=rownames[i])
     
+    
+    row_size = step
+    col_size = num_images
+    resolution = 64
+    plt.figure(figsize=(5 * step, 5 * num_images) , dpi=50)
     for i in range(num_images):
         for k in range(step):
             image=out[i,k,:,:,:]
-            visualizer.set_cell(i, 1+k, image=image)
-    
+            plt.subplot(num_images , row_size, i * row_size + k + 1)
+            plt.axis("off")
+            plt.imshow(Image.fromarray(image))
+            if save:
+                Image.fromarray(image).save(f'{i}_{k}.jpg')
+            # visualizer.set_cell(i, 1+k, image=image)
+    plt.savefig(f'./html/'+bname+'_'+suffix+'.png')
     # Save results.
-    visualizer.save(f'./html/'+bname+'_'+suffix+'.html')
+    # visualizer.save(f'./html/'+bname+'_'+suffix+'.html')
 
 
 
@@ -94,12 +105,12 @@ def convert_images_from_uint8(images, drange=[-1,1], nhwc_to_nchw=False):
 
 
 class Manipulator():
-    def __init__(self,dataset_name='ffhq'):
+    def __init__(self,dataset_name, model_name):
         self.file_path='./'
         self.img_path=self.file_path+'npy/'+dataset_name+'/'
         self.model_path=self.file_path+'model/'
         self.dataset_name=dataset_name
-        self.model_name=dataset_name+'.pkl'
+        self.model_name=model_name+'.pkl'
         
         self.alpha=[0] #manipulation strength 
         self.num_images=10
@@ -244,18 +255,19 @@ class Manipulator():
 if __name__ == "__main__":
     
     
-    M=Manipulator(dataset_name='ffhq')
+    M=Manipulator(dataset_name='ffhq' , model_name='ffhq')
     
     
     #%%
-    M.alpha=[-5,0,5]
+    M.alpha=[-30,-25,-20,-15,-10,-5,0,5,10,15,20,25,30]
     M.num_images=20
-    lindex,cindex=6,501
+    M.img_index = 0
+    lindex,cindex=12,414
     
     M.manipulate_layers=[lindex]
     codes,out=M.EditOneC(cindex) #dlatent_tmp
     tmp=str(M.manipulate_layers)+'_'+str(cindex)
-    M.Vis(tmp,'c',out)
+    M.Vis(tmp,'c',out , save=False)
     
     
     

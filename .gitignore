@@ -1,7 +1,8 @@
 # Ignore everything in this directory
 metrics_checkpoint/
 face_parsing/
-**.pyc
+*.pyc
 */__pycache__/*
 # Except this file
 !.gitignore
+selected

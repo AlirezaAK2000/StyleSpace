@@ -1,6 +1,7 @@
 import os
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1" #(or "1" or "2")
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 
 import os
@@ -140,6 +141,7 @@ def GetS(output_path,num_img):
     print('Generate S')
     tmp=output_path+'/W.npy'
     dlatents=np.load(tmp)[:num_img]
+    print(f"dlatents shape : {dlatents.shape}")
     
     with tf.Session() as sess:
         init = tf.global_variables_initializer()
@@ -157,6 +159,7 @@ def GetS(output_path,num_img):
     
     layer_names=[layer.name for layer in select_layers1]
     save_tmp=[layer_names,all_s]
+    print([s.shape for s in all_s])
     return save_tmp
 
     
