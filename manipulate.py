@@ -3,14 +3,24 @@
 import os
 import os.path
 import pickle
+from turtle import shape
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm
 from dnnlib import tflib
 from utils.visualizer import HtmlPageVisualizer
 from PIL import Image
 import matplotlib.pyplot as plt
+import json
+import argparse
+import pickle
+from functools import reduce
+from concurrent.futures import ThreadPoolExecutor
 
-def Vis(bname,suffix,out,rownames=None,colnames=None , save=False):
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+
+
+def Vis(bname,suffix,out,rownames=None,colnames=None, logits=None , save=False):
     num_images=out.shape[0]
     step=out.shape[1]
     
@@ -38,6 +48,8 @@ def Vis(bname,suffix,out,rownames=None,colnames=None , save=False):
             image=out[i,k,:,:,:]
             plt.subplot(num_images , row_size, i * row_size + k + 1)
             plt.axis("off")
+            if logits != None:
+                plt.title(round(logits[i][k],6))
             plt.imshow(Image.fromarray(image))
             if save:
                 Image.fromarray(image).save(f'{i}_{k}.jpg')
@@ -104,9 +116,39 @@ def convert_images_from_uint8(images, drange=[-1,1], nhwc_to_nchw=False):
     return images/ 255 *(drange[1] - drange[0])+ drange[0]
 
 
+
+
+def check_manipulation(images , classifier):
+    
+    logits = []
+    variances = []
+    for i in range(images.shape[0]):
+        tmp_imgs = images[i,:,:,:,:]
+        tmp_imgs = convert_images_from_uint8(tmp_imgs, drange=[-1,1], nhwc_to_nchw=True)
+        tmp = classifier.run(tmp_imgs, None)
+        tmp1=tmp.reshape(-1)
+        logits.append(tmp1)
+        variances.append(np.var(tmp1))
+    return logits , variances        
+
+def resize_images(out,shp):
+    resized_out = []
+    for i in range(out.shape[0]):
+        images = []
+        for j in range(out.shape[1]):
+            image = np.array(Image.fromarray(out[i,j,:,:,:]).resize(shp))
+            image = image[None , :]
+            images.append(image)
+        images = np.concatenate(images)
+        resized_out.append(images[None,:])
+    resized_out = np.concatenate(resized_out)
+    return resized_out
+
+
 class Manipulator():
-    def __init__(self,dataset_name, model_name):
+    def __init__(self,dataset_name, model_name , classifier = None):
         self.file_path='./'
+        self.classifier = classifier
         self.img_path=self.file_path+'npy/'+dataset_name+'/'
         self.model_path=self.file_path+'model/'
         self.dataset_name=dataset_name
@@ -170,11 +212,15 @@ class Manipulator():
     
     
     
-    def MSCode(self,dlatent_tmp,boundary_tmp):
+    def MSCode(self,dlatent_tmp,boundary_tmp , candidates = []):
         
         step=len(self.alpha)
-        dlatent_tmp1=[tmp.reshape((self.num_images,-1)) for tmp in dlatent_tmp]
-        dlatent_tmp2=[np.tile(tmp[:,None],(1,step,1)) for tmp in dlatent_tmp1] # (10, 7, 512)
+        dlatent_tmp1 = None
+        if candidates != []:
+            dlatent_tmp1 = [tmp.reshape((len(candidates),-1)) for tmp in dlatent_tmp]
+        else:
+            dlatent_tmp1 = [tmp.reshape((self.num_images,-1)) for tmp in dlatent_tmp]
+        dlatent_tmp2 = [np.tile(tmp[:,None],(1,step,1)) for tmp in dlatent_tmp1] # (10, 7, 512)
 
         l=np.array(self.alpha)
         l=l.reshape(
@@ -217,9 +263,14 @@ class Manipulator():
         out=self.GenerateImg(codes)
         return codes,out
     
-    def EditOneC(self,cindex,dlatent_tmp=None): 
+    def EditOneC(self,cindex,dlatent_tmp=None , candidates= []): 
         if dlatent_tmp==None:
-            dlatent_tmp=[tmp[self.img_index:(self.img_index+self.num_images)] for tmp in self.dlatents]
+            if candidates != []:
+                dlatent_tmp=[tmp[candidates] for tmp in self.dlatents]
+            else:
+                dlatent_tmp=[tmp[self.img_index:(self.img_index+self.num_images)] for tmp in self.dlatents]
+
+                
         
         boundary_tmp=[[] for i in range(len(self.dlatents))]
         
@@ -232,7 +283,7 @@ class Manipulator():
         tmp1[cindex]=self.code_std[ml][cindex]  #1
         boundary_tmp[ml]=tmp1
         
-        codes=self.MSCode(dlatent_tmp,boundary_tmp)
+        codes=self.MSCode(dlatent_tmp,boundary_tmp, candidates=candidates)
         out=self.GenerateImg(codes)
         return codes,out
     
@@ -246,30 +297,102 @@ class Manipulator():
         
     
     
-    
-    
-    
+    def find_related_attributes(self, S ,codes , image_attributes , cand):
+        # codes must be flattened before assignment 
+        classes = []
+        close_img = []
+        for i in tqdm(range(codes.shape[0]) , desc="image distance"):
+            img_index = cand[i]
+            image_att = set(image_attributes[str(img_index)])
+            all_att = set()
+            cm = []
+            for j in range(codes.shape[1]):
+                img_vec = codes[i,j,:]
+                distances = (np.sum((S * img_vec) ** 2 , axis=1)) ** 1/2
+                sorted_distances = np.argsort(distances)
+                ch_vecs = sorted_distances[-5:]
+                cm.append(ch_vecs)
+                for k in ch_vecs:
+                    all_att = all_att.union(set(image_attributes[str(k)]).difference(image_att))
+            close_img.append(cm)
+            classes.append(list(all_att))    
+        
+        return close_img, classes    
+        
 
-
-#%%
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Process some integers.')
+
+    
+    parser.add_argument('--bname',type=str,default=None,
+                help='attribute')
+    
+    args = parser.parse_args()
+    
+    
+    features = {'male':'00-male', 'smiling':'01-smiling', 'attractive':'02-attractive', 'wavy-hair':'03-wavy-hair', 'young':'04-young',
+       '5-o-clock-shadow':'05-5-o-clock-shadow', 'arched-eyebrows':'06-arched-eyebrows', 'bags-under-eyes':'07-bags-under-eyes',
+       'bald':'08-bald', 'bangs':'09-bangs', 'big-lips':'10-big-lips', 'big-nose':'11-big-nose', 'black-hair':'12-black-hair',
+       'blond-hair':'13-blond-hair', 'blurry':'14-blurry', 'brown-hair':'15-brown-hair', 'bushy-eyebrows':'16-bushy-eyebrows',
+       'chubby':'17-chubby', 'double-chin':'18-double-chin', 'eyeglasses':'19-eyeglasses', 'goatee':'20-goatee',
+       'gray-hair':'21-gray-hair', 'heavy-makeup':'22-heavy-makeup', 'high-cheekbones':'23-high-cheekbones',
+       'mouth-slightly-open':'24-mouth-slightly-open', 'mustache':'25-mustache', 'narrow-eyes':'26-narrow-eyes',
+       'no-beard':'27-no-beard', 'oval-face':'28-oval-face', 'pale-skin':'29-pale-skin', 'pointy-nose':'30-pointy-nose',
+       'receding-hairline':'31-receding-hairline', 'rosy-cheeks':'32-rosy-cheeks', 'sideburns':'33-sideburns',
+       'straight-hair':'34-straight-hair', 'wearing-earrings':'35-wearing-earrings', 'wearing-hat':'36-wearing-hat',
+       'wearing-lipstick':'37-wearing-lipstick', 'wearing-necklace':'38-wearing-necklace', 'wearing-necktie':'39-wearing-necktie'}
+    
+    
+    
+    bname = features[args.bname]
+    
+    tflib.init_tf()
+
+    
+    with open(f"metrics_checkpoint/celebahq-classifier-{bname}.pkl" , 'rb') as f:
+        classifier = pickle.load(f)
+    
+    
+    
+    
+    with open("npy/ffhq/candidates.json", 'r') as f:
+        ffhq_candidates = json.load(f)
+    
+    ffhq_cand = np.array(reduce(lambda x,y : x + y , ffhq_candidates.values()))[:5]
+    
+        
+    with open("npy/celeba-hq/candidates.json", 'r') as f:
+        celeba_candidates = json.load(f)
+    
+    with open('npy/ffhq/img_cls.json' , 'r') as f:
+        image_attributes = json.load(f)
     
     
     M=Manipulator(dataset_name='ffhq' , model_name='ffhq')
     
-    
     #%%
-    M.alpha=[-30,-25,-20,-15,-10,-5,0,5,10,15,20,25,30]
-    M.num_images=20
-    M.img_index = 0
-    lindex,cindex=12,414
+    M.alpha=[-20,-10,-5,0,5,10,20]
+    # M.num_images=5
+    # M.img_index = 0
+    lindex,cindex=15,45
     
     M.manipulate_layers=[lindex]
-    codes,out=M.EditOneC(cindex) #dlatent_tmp
-    tmp=str(M.manipulate_layers)+'_'+str(cindex)
-    M.Vis(tmp,'c',out , save=False)
+    codes,out=M.EditOneC(cindex , candidates=ffhq_cand) #dlatent_tmp
     
+    a = M.find_related_attributes(np.concatenate(M.dlatents, axis=1) , np.concatenate(codes,axis=2) , image_attributes=image_attributes,cand=ffhq_cand)
+    print(a)
+    # resized_out = resize_images(out,(256,256))
     
+
+    
+    # logits, variances = check_manipulation(resized_out,classifier)
+    
+
+    # tmp=str(M.manipulate_layers)+'_'+str(cindex)
+    # M.Vis(tmp,'c',out , save=False, logits=logits)
+    
+    # plt.plot(list(variances) , [i for i in range(len(variances))])
+    # plt.show()
     
     
     

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Apr 17 21:33:42 2020
-
-@author: wuzongze
-"""
 
 import os
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -34,6 +28,7 @@ if __name__ == "__main__":
     parser.add_argument('-save_path',type=str,help='path to save attribute file') 
     parser.add_argument('-classifer_path',default='./metrics_checkpoint',type=str,help='path to a folder of classifers') 
     parser.add_argument('-batch_size',default=5,type=int,help='batch size') 
+    
     
     opt = parser.parse_args()
     
