@@ -106,7 +106,7 @@ def GetCode(Gs,random_state,num_img,num_once,truncation=True):
     return dlatents
 
     
-def GetImg(Gs,num_img,num_once,output_path,resize=None):
+def GetImg(Gs,start_index,num_img,num_once,output_path,resize=None):
     print('Generate Image')
     tmp=output_path+'/W.npy'
     dlatents=np.load(tmp) 
@@ -118,8 +118,9 @@ def GetImg(Gs,num_img,num_once,output_path,resize=None):
         images=[]
         for k in range(num_once):
             tmp=dlatents[i*num_once+k]
-            tmp=tmp[None,None,:]
-            tmp=np.tile(tmp,(1,Gs.components.synthesis.input_shape[1],1))
+            if len(tmp.shape) < 2:
+                tmp=tmp[None,None,:]
+                tmp=np.tile(tmp,(1,Gs.components.synthesis.input_shape[1],1))
             image2= Gs.components.synthesis.run(tmp, randomize_noise=False, output_transform=fmt)
             
             if resize is not None:
@@ -137,6 +138,38 @@ def GetImg(Gs,num_img,num_once,output_path,resize=None):
     
     return all_images
 
+def GetImgW(Gs,W,start_index,num_img,num_once,output_path,resize=None):
+    dlatents=W[start_index:start_index + num_img] 
+    fmt = dict(func=tflib.convert_images_to_uint8, nchw_to_nhwc=True)
+    
+    all_images=[]
+    for i in range(int(num_img/num_once)):
+        print(i)
+        images=[]
+        for k in range(num_once):
+            tmp=dlatents[i*num_once+k]
+            if len(tmp.shape) < 2:
+                tmp=tmp[None,None,:]
+                tmp=np.tile(tmp,(1,Gs.components.synthesis.input_shape[1],1))
+            image2= Gs.components.synthesis.run(tmp, randomize_noise=False, output_transform=fmt)
+            
+            if resize is not None:
+                img=Image.fromarray(image2[0]).resize((resize,resize),Image.LANCZOS)
+                img=np.array(img)
+                image2=img[None,:]
+            
+            images.append(image2)
+            
+        images=np.concatenate(images)
+        
+        all_images.append(images)
+        
+    all_images=np.concatenate(all_images)
+    
+    return all_images
+
+
+
 def GetS(output_path,num_img):
     print('Generate S')
     tmp=output_path+'/W.npy'
@@ -150,8 +183,9 @@ def GetS(output_path,num_img):
         Gs=LoadModel(dataset_name)
         Gs.print_layers()  #for ada
         select_layers1=GetSNames(suffix=None)  #None,'/mul_1:0','/mod_weight/read:0','/MatMul:0'
-        dlatents=dlatents[:,None,:]
-        dlatents=np.tile(dlatents,(1,Gs.components.synthesis.input_shape[1],1))
+        if self.dataset_name != 'ffhq':    
+            dlatents=dlatents[:,None,:]
+            dlatents=np.tile(dlatents,(1,Gs.components.synthesis.input_shape[1],1))
         
         all_s = sess.run(
             select_layers1,
@@ -262,7 +296,7 @@ if __name__ == "__main__":
         dlatents=save_tmp[1]
         m,std=GetCodeMS(dlatents)
         save_tmp=[m,std]
-        print([s.shape for s in save_tmp[0]])
+        print([s.shape for s in save_tmp[0]])   
         save_name='S_mean_std'
         tmp=output_path+'/'+save_name
         with open(tmp, "wb") as fp:
@@ -278,9 +312,21 @@ if __name__ == "__main__":
     
     elif args.code_type=='images':
         Gs=LoadModel(dataset_name=dataset_name)
-        all_images=GetImg(Gs,num_img=num_img,num_once=num_once,output_path=output_path,resize=args.resize)
-        tmp=output_path+'/images'
-        np.save(tmp,all_images)
+        if dataset_name != "ffhq_real":
+            all_images=GetImg(Gs,start_index=0,num_img=num_img,num_once=num_once,output_path=output_path,resize=args.resize)
+            tmp=output_path+'/images'
+            np.save(tmp,all_images)
+        else:
+            chunks = [0,20000 ,20000, 20000 ,10000]
+            tmp=output_path+'/W.npy'
+            dlatents=np.load(tmp)
+            for i in range(len(chunks[1:])):
+                print(f"chunk : {i} size : {chunks[i]}")
+                all_images=GetImgW(Gs,W=dlatents, start_index=sum(chunks[:i-1]) ,num_img=chunks[i],num_once=num_once,output_path=output_path,resize=args.resize)
+                tmp=output_path+f'/images{i}'
+                np.save(tmp,all_images)
+
+            
     
     
     
