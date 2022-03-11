@@ -381,7 +381,7 @@ if __name__ == "__main__":
     
     a = M.find_related_attributes(np.concatenate(M.dlatents, axis=1) , np.concatenate(codes,axis=2) , image_attributes=image_attributes,cand=ffhq_cand)
     print(a)
-    # resized_out = resize_images(out,(256,256))
+    resized_out = resize_images(out,(256,256))
     
 
     

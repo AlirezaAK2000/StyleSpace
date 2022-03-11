@@ -6,7 +6,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
 
-from manipulate import Manipulator
+from manipulate import Manipulator , check_manipulation, resize_images
 import numpy as np
 import pickle
 import pandas as pd
@@ -141,7 +141,7 @@ class MAdvance(Manipulator):
             logits = {}
             for i in tqdm(positive_indexs):
                 img = Image.fromarray(images[i])
-                img.save(f"{dirrr}/{i}.png")
+                img.save(f"{dirrr}/{i}.jpg")
                 logits[str(i)] = self.results[self.bname][i]
             
             with open(f'{dirrr}/logits.json' , 'w') as f:
@@ -271,6 +271,7 @@ if __name__ == "__main__":
         shutil.rmtree(dirrr)
     os.system(f'mkdir {dirrr} --p')
     
+    
 #    lp_sort=M.ConsistenceCheck(num_run=1000)
     
     lp_candidate,lp_sort= M.AllCheck(positive=True)
@@ -289,6 +290,10 @@ if __name__ == "__main__":
     M.img_index= args.start_index
     M.num_images=10
     start=0
+    
+    with open(f"metrics_checkpoint/celebahq-classifier-{M.bname}.pkl" , 'rb') as f:
+        classifier = pickle.load(f)
+    
 
     os.system(f'mkdir html/{dataset_name}_{args.exempelar_set} --p')
     for i in tqdm(range(10),desc='visual chanel generation'):
@@ -298,8 +303,11 @@ if __name__ == "__main__":
         
         M.manipulate_layers=[lindex]
         codes,out=M.EditOneC(bname) 
+        resized_out = resize_images(out,(256,256))
+        logits, variances = check_manipulation(resized_out,classifier)
+
         tmp=f'{dataset_name}_{args.exempelar_set}/'+str(M.manipulate_layers)+'_'+str(bname)
-        M.Vis(tmp,'c',out)
+        M.Vis(tmp,'c',out,logits=logits)
     
     print(f"finish time : {round((time.time() - start)/60 , 2)} mins")
     #%%

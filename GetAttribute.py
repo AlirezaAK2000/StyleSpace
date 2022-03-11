@@ -3,6 +3,8 @@
 import os
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1" #(or "1" or "2")
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+
 import pickle
 import dnnlib.tflib as tflib
 import numpy as np
@@ -11,6 +13,7 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 import argparse
+from tqdm import tqdm
 
 def convert_images_from_uint8(images, drange=[-1,1], nhwc_to_nchw=False):
     """Convert a minibatch of images from uint8 to float32 with configurable dynamic range.
@@ -49,16 +52,14 @@ if __name__ == "__main__":
     
     tflib.init_tf()
     results={}
-    for name in names:
+    for name in tqdm(names):
         print(name)
         tmp=os.path.join(classifer_path,name)
         with open(tmp, 'rb') as f:
                 classifier = pickle.load(f)
         
         logits=np.zeros(len(imgs))
-        for i in range(int(imgs.shape[0]/batch_size)):
-            if i%(100)==0:
-                print(i/100)
+        for i in tqdm(range(int(imgs.shape[0]/batch_size))):
             tmp_imgs=imgs[(i*batch_size):((i+1)*batch_size)]
             tmp_imgs=convert_images_from_uint8(tmp_imgs, drange=[-1,1], nhwc_to_nchw=True)
             tmp = classifier.run(tmp_imgs, None)
